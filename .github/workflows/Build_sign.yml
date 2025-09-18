@@ -1,0 +1,76 @@
+name: Build
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-2025
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v5
+
+      - name: Run build.bat
+        shell: cmd
+        run: build.bat
+
+      - name: Run installer/build.bat
+        shell: cmd
+        run: installer/build.bat
+
+      - name: Setup Visual Studio Developer Command Prompt
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Sign executable files
+        shell: cmd
+        run: |
+          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\Tools\VsDevCmd.bat" -arch=x64
+          for /r %%f in (*.exe, *.dll, *.msi, *.cab) do (
+            if exist "%%f" (
+              echo Signing %%f
+              signtool sign %SigningProvider% /t %TimestampServer% "%%f"
+            )
+          )
+        env:
+          SigningProvider: /sha1 8BC932FDFF15B892E8364C49B383210810E4709D
+          TimestampServer: http://timestamp.entrust.net/rfc3161ts2
+
+      - name: Extract version
+        id: get_version
+        shell: bash
+        run: |
+          VERSION=$(grep 'Number = "' version/version.go | sed 's/.*Number = "\(.*\)"/\1/')
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Create Release
+        id: create_release
+        uses: softprops/action-gh-release@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: v${{ steps.get_version.outputs.VERSION }}
+          name: ${{ steps.get_version.outputs.VERSION }}
+          draft: false
+          prerelease: false
+
+      - name: Upload Release Assets
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          for file in installer/dist/*; do
+            gh release upload v${{ steps.get_version.outputs.VERSION }} "$file" --clobber --repo ${{ github.repository }}
+          done
+        shell: bash
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: artifacts
+          path: |
+            x86/**
+            amd64/**
+            arm64/**
+            installer/dist/**
