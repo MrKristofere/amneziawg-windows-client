@@ -1,4 +1,4 @@
-name: Build
+name: Build Sign
 
 on:
   workflow_dispatch:
