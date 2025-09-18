@@ -31,7 +31,7 @@ jobs:
           for /r %%f in (*.exe, *.dll, *.msi, *.cab) do (
             if exist "%%f" (
               echo Signing %%f
-              signtool sign %SigningProvider% /t %TimestampServer% "%%f"
+              signtool sign /fd sha256 %SigningProvider% /t %TimestampServer% "%%f"
             )
           )
         env:
